@@ -1,5 +1,9 @@
 use bracket_lib::prelude::*;
 
+const SCREEN_WIDTH: i32 = 80;
+const SCREEN_HEIGHT: i32 = 50;
+const FRAME_DURATION: f32 = 75.0;
+
 enum GameMode {
     Menu,
     Playing,
@@ -24,14 +28,18 @@ impl Player {
 
 struct State {
     mode: GameMode,
-    player: Player
+    player: Player,
+    frame_time: f32,
+    paused: bool
 }
 
 impl State {
     fn new() -> Self {
         State {
             mode: GameMode::Menu,
-            player: Player::new(5,20)
+            player: Player::new(5,20),
+            frame_time: 0.0,
+            paused: false
         }
     }
 
@@ -52,27 +60,11 @@ impl State {
     }
 
     fn playing(&mut self, ctx: &mut BTerm) {
-        ctx.cls();
-        ctx.print(10,10, "Playing the game");
-
-        self.render_player(ctx);
-
-        // apply gravity to dragon
-        self.gravity_and_move();
-
-        // apply horizontal movement to walls
-        // we use player.x to simulate horizontal movement
-        self.player.x += 1;
-
-        let mut colliding = false;
-        // check for collisions with walls
-        // check for collision with ground
-        if self.player.y > 40 {
-            colliding = true;
-        }
-
-        if colliding == true {
-            self.mode = GameMode::End;
+        if !self.paused {
+            self.frame_time += ctx.frame_time_ms;
+            if self.frame_time > FRAME_DURATION {
+                self.update();
+            }
         }
 
         // handle key presses
@@ -83,15 +75,43 @@ impl State {
                 _ => {}
             }
         }
+
+        ctx.cls_bg(NAVY);
+        ctx.print(1,1, "Press [SPACE] to fly!");
+        self.render_player(ctx);
+    }
+
+    fn update(&mut self) {
+        self.frame_time = 0.0;
+            
+        // apply gravity to dragon
+        self.gravity_and_move();
+
+        // apply horizontal movement to walls
+        // we use player.x to simulate horizontal movement
+        self.player.x += 1;
+
+
+        let mut colliding = false;
+        // check for collisions with walls
+        // check for collision with ground
+        if self.player.y > SCREEN_HEIGHT {
+            colliding = true;
+        }
+
+        if colliding == true {
+            self.mode = GameMode::End;
+        }
     }
     
     fn game_over(&mut self, ctx: &mut BTerm) {
         ctx.cls();
-        ctx.print(40,10, "Game over, man");
+        ctx.print(10,10, "Game over, man");
     }
 
     fn restart(&mut self) {
-        self.player = Player::new(5,20)
+        self.player = Player::new(5,20);
+        self.frame_time = 0.0;
         self.mode = GameMode::Playing;
     }
 
@@ -121,14 +141,12 @@ impl State {
     }
 
     fn thrust_up(&mut self) {
-        self.player.velocity -= 2.0;
-        if self.player.velocity < -2.0 {
-            self.player.velocity = -2.0;
-        }
+        self.player.velocity = -2.0;
     }
 
     fn pause(&mut self) {
         // todo apply a pause feature
+        self.paused = !self.paused;
     }
 }
 
