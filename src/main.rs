@@ -86,6 +86,7 @@ impl State {
         if !self.paused {
             self.frame_time += ctx.frame_time_ms;
             if self.frame_time > FRAME_DURATION {
+                self.frame_time = 0.0;
                 self.update();
             }
         }
@@ -103,20 +104,25 @@ impl State {
         self.render_obstacle(ctx);
         self.render_player(ctx);
         ctx.print(1,1, "Press [SPACE] to fly!");
+        ctx.print(1,3, &format!("Score: {}", self.score));
     }
 
     fn update(&mut self) {
-        self.frame_time = 0.0;
-            
-        // apply gravity to dragon
-        self.gravity_and_move();
+        self.move_player();
+        self.check_score();
 
-        if self.is_collision() {
+        if self.is_colliding_with_obstacle_or_floor() {
             self.mode = GameMode::End;
         }
     }
 
-    fn is_collision(&mut self) -> bool {
+    fn check_score(&mut self) {
+        if self.player.x == self.obstacle.x {
+            self.score += 1;
+        }
+    }
+
+    fn is_colliding_with_obstacle_or_floor(&mut self) -> bool {
         
         // check for collision with ground first as this is easy
         if self.player.y > SCREEN_HEIGHT {
@@ -143,7 +149,8 @@ impl State {
     fn game_over(&mut self, ctx: &mut BTerm) {
         ctx.cls_bg(WINDOW_BG);
         ctx.print(10,10, "Game over, man");
-        ctx.print(10,12, "Press [SPACE] to return to the menu");
+        ctx.print(10,12, &format!("Your score: {}", self.score));
+        ctx.print(10,16, "Press [SPACE] to return to the menu");
 
         // handle key presses
         if let Some(key) = ctx.key {
@@ -195,7 +202,7 @@ impl State {
         );
     }
 
-    fn gravity_and_move(&mut self) {
+    fn move_player(&mut self) {
         // apply gravity if less than terminal velocity
         if self.player.velocity < 2.0 {
             self.player.velocity += 0.2;
