@@ -4,6 +4,7 @@ const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
 const FRAME_DURATION: f32 = 75.0;
 const WINDOW_BG: (u8,u8,u8) = NAVY;
+const X_DRAW_OFFSET: i32 = 5;
 
 enum GameMode {
     Menu,
@@ -50,18 +51,18 @@ struct State {
     frame_time: f32,
     paused: bool,
     score: i32,
-    obstacles: Vec<Obstacle>
+    obstacle: Obstacle
 }
 
 impl State {
     fn new() -> Self {
         State {
             mode: GameMode::Menu,
-            player: Player::new(5,20),
+            player: Player::new(0,20),
             frame_time: 0.0,
             paused: false,
             score: 0,
-            obstacles: vec!()
+            obstacle: Obstacle::new(SCREEN_WIDTH, 0)
         }
     }
 
@@ -99,23 +100,16 @@ impl State {
         }
 
         ctx.cls_bg(WINDOW_BG);
-        self.render_obstacles(ctx);
+        self.render_obstacle(ctx);
         self.render_player(ctx);
         ctx.print(1,1, "Press [SPACE] to fly!");
     }
 
     fn update(&mut self) {
         self.frame_time = 0.0;
-
-        // add a new obstable if required
-        self.add_obstacle();
             
         // apply gravity to dragon
         self.gravity_and_move();
-
-        // apply horizontal movement to walls
-        // we use player.x to simulate horizontal movement
-        self.player.x += 1;
 
         if self.is_collision() {
             self.mode = GameMode::End;
@@ -123,24 +117,23 @@ impl State {
     }
 
     fn is_collision(&mut self) -> bool {
-        // check for collisions with walls
-        for obstacle in &self.obstacles {
-            if self.player.x != obstacle.x {
-                continue;
-            }
-            
-            let half_size = obstacle.size / 2;
-            if self.player.y < obstacle.gap_y - half_size {
-                return true;
-            }
-
-            if self.player.y > obstacle.gap_y + half_size {
-                return true;
-            }
+        
+        // check for collision with ground first as this is easy
+        if self.player.y > SCREEN_HEIGHT {
+            return true;
         }
 
-        // check for collision with ground
-        if self.player.y > SCREEN_HEIGHT {
+        // check for collisions with walls
+        if self.player.x != self.obstacle.x {
+            return false;
+        }
+        
+        let half_size = self.obstacle.size / 2;
+        if self.player.y < self.obstacle.gap_y - half_size {
+            return true;
+        }
+
+        if self.player.y > self.obstacle.gap_y + half_size {
             return true;
         }
 
@@ -167,44 +160,34 @@ impl State {
         self.mode = GameMode::Playing;
     }
 
-    fn add_obstacle(&mut self) {
-        if self.obstacles.len() < 2 {
-            self.obstacles.push(Obstacle::new(SCREEN_WIDTH+self.player.x, 10))
+    fn render_obstacle(&mut self, ctx: &mut BTerm) {
+        let screen_x = self.obstacle.x - self.player.x + X_DRAW_OFFSET;
+        let half_size = self.obstacle.size / 2;
+        
+        for y in 0..self.obstacle.gap_y - half_size {
+            ctx.set(
+                screen_x,
+                y,
+                RED,
+                WINDOW_BG,
+                to_cp437('|')
+            );
         }
-    }
 
-    fn render_obstacles(&mut self, ctx: &mut BTerm) {
-        let player_x = self.player.x;
-        for obstacle in &self.obstacles {
-            let screen_x = obstacle.x - player_x;
-            let half_size = obstacle.size / 2;
-            
-            for y in 0..obstacle.gap_y - half_size {
-                ctx.set(
-                    screen_x,
-                    y,
-                    RED,
-                    WINDOW_BG,
-                    to_cp437('|')
-                );
-            }
-
-            for y in obstacle.gap_y + half_size..SCREEN_HEIGHT {
-                ctx.set(
-                    screen_x,
-                    y,
-                    RED,
-                    WINDOW_BG,
-                    to_cp437('|')
-                );
-            }
-
+        for y in self.obstacle.gap_y + half_size..SCREEN_HEIGHT {
+            ctx.set(
+                screen_x,
+                y,
+                RED,
+                WINDOW_BG,
+                to_cp437('|')
+            );
         }
     }
 
     fn render_player(&mut self, ctx: &mut BTerm) {
         ctx.set(
-            5,
+            0+X_DRAW_OFFSET,
             self.player.y,
             YELLOW,
             WINDOW_BG,
@@ -225,6 +208,8 @@ impl State {
         if self.player.y < 0 {
             self.player.y = 0;
         }
+
+        self.player.x += 1;
     }
 
     fn thrust_up(&mut self) {
