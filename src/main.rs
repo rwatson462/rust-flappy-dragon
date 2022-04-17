@@ -114,6 +114,11 @@ impl State {
         if self.is_colliding_with_obstacle_or_floor() {
             self.mode = GameMode::End;
         }
+
+        // spawn new obstacle if we're past the old one
+        if self.player.x - X_DRAW_OFFSET > self.obstacle.x {
+            self.obstacle = Obstacle::new(SCREEN_WIDTH+self.player.x-X_DRAW_OFFSET, self.score);
+        }
     }
 
     fn check_score(&mut self) {
