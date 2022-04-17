@@ -2,7 +2,7 @@ use bracket_lib::prelude::*;
 
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
-const FRAME_DURATION: f32 = 75.0;
+const FRAME_DURATION: f32 = 50.0;
 const WINDOW_BG: (u8,u8,u8) = NAVY;
 const X_DRAW_OFFSET: i32 = 5;
 
@@ -67,58 +67,51 @@ impl State {
     }
 
     fn main_menu(&mut self, ctx: &mut BTerm) {
-        ctx.cls_bg(WINDOW_BG);
-        ctx.print(1,1, "Hello, Flappy Dragon!");
-        // todo: wait for user input before starting a game
-        ctx.print(2,5, "(P) Play");
-        ctx.print(2,7, "(Q) Quit");
-
-        if let Some(key) = ctx.key {
-            match key {
-                VirtualKeyCode::P => self.restart(),
-                VirtualKeyCode::Q => ctx.quitting = true,
-                _ => {}
-            }
-        }
+        self.render_menu(ctx);
+        self.poll_for_menu_input(ctx);
     }
 
     fn playing(&mut self, ctx: &mut BTerm) {
-        if !self.paused {
-            self.frame_time += ctx.frame_time_ms;
-            if self.frame_time > FRAME_DURATION {
-                self.frame_time = 0.0;
-                self.update();
-            }
+        self.update_game_state(ctx);
+        self.poll_for_ingame_input(ctx);
+        self.render_ingame(ctx);
+    }
+
+    fn update_game_state(&mut self, ctx: &mut BTerm) {
+        if self.paused {
+            return;
         }
 
-        // handle key presses
-        if let Some(key) = ctx.key {
-            match key {
-                VirtualKeyCode::Space => self.thrust_up(),
-                VirtualKeyCode::P => self.pause(),
-                _ => {}
-            }
+        self.frame_time += ctx.frame_time_ms;
+        if self.frame_time > FRAME_DURATION {
+            self.frame_time = 0.0;
+            self.update();
         }
-
-        ctx.cls_bg(WINDOW_BG);
-        self.render_obstacle(ctx);
-        self.render_player(ctx);
-        ctx.print(1,1, "Press [SPACE] to fly!");
-        ctx.print(1,3, &format!("Score: {}", self.score));
     }
 
     fn update(&mut self) {
         self.move_player();
         self.check_score();
+        self.end_game_if_colliding();
+        self.spawn_new_obstacle();
+    }
 
-        if self.is_colliding_with_obstacle_or_floor() {
-            self.mode = GameMode::End;
+    fn poll_for_ingame_input(&mut self, ctx: &mut BTerm) {
+        if let Some(key) = ctx.key {
+            match key {
+                VirtualKeyCode::Space => self.flap(),
+                VirtualKeyCode::P => self.pause(),
+                _ => {}
+            }
         }
+    }
 
-        // spawn new obstacle if we're past the old one
-        if self.player.x - X_DRAW_OFFSET > self.obstacle.x {
-            self.obstacle = Obstacle::new(SCREEN_WIDTH+self.player.x-X_DRAW_OFFSET, self.score);
-        }
+    fn render_ingame(&mut self, ctx: &mut BTerm) {
+        ctx.cls_bg(WINDOW_BG);
+        self.render_obstacle(ctx);
+        self.render_player(ctx);
+        ctx.print(1,1, "Press [SPACE] to fly!");
+        ctx.print(1,3, &format!("Score: {}", self.score));
     }
 
     fn check_score(&mut self) {
@@ -127,14 +120,33 @@ impl State {
         }
     }
 
-    fn is_colliding_with_obstacle_or_floor(&mut self) -> bool {
-        
-        // check for collision with ground first as this is easy
+    fn end_game_if_colliding(&mut self) {
+        if self.is_colliding_with_floor() {
+            self.mode = GameMode::End;
+            return;
+        }
+
+        if self.is_colliding_with_obstacle() {
+            self.mode = GameMode::End;
+        }
+    }
+
+    fn spawn_new_obstacle(&mut self) {
+        // applying X_DRAW_OFFSET here gives a more natural appearance to the obstacles appearing
+        if self.player.x - X_DRAW_OFFSET > self.obstacle.x {
+            self.obstacle = Obstacle::new(SCREEN_WIDTH+self.player.x-X_DRAW_OFFSET, self.score);
+        }
+    }
+
+    fn is_colliding_with_floor(&mut self) -> bool {
         if self.player.y > SCREEN_HEIGHT {
             return true;
         }
 
-        // check for collisions with walls
+        false
+    }
+
+    fn is_colliding_with_obstacle(&mut self) -> bool {
         if self.player.x != self.obstacle.x {
             return false;
         }
@@ -161,6 +173,23 @@ impl State {
         if let Some(key) = ctx.key {
             match key {
                 VirtualKeyCode::Space => self.mode = GameMode::Menu,
+                _ => {}
+            }
+        }
+    }
+
+    fn render_menu(&mut self, ctx: &mut BTerm) {
+        ctx.cls_bg(WINDOW_BG);
+        ctx.print(1,1, "Hello, Flappy Dragon!");
+        ctx.print(2,5, "(P) Play");
+        ctx.print(2,7, "(Q) Quit");
+    }
+
+    fn poll_for_menu_input(&mut self, ctx: &mut BTerm) {
+        if let Some(key) = ctx.key {
+            match key {
+                VirtualKeyCode::P => self.restart(),
+                VirtualKeyCode::Q => ctx.quitting = true,
                 _ => {}
             }
         }
@@ -208,23 +237,34 @@ impl State {
     }
 
     fn move_player(&mut self) {
-        // apply gravity if less than terminal velocity
+        self.apply_gravity_to_velocity();
+        self.apply_velocity_to_player();
+        self.bound_player_to_screen();
+        self.horizontally_advance_player();
+    }
+
+    fn apply_gravity_to_velocity(&mut self) {
+        // arbitrary terminal velocity of 2.0
         if self.player.velocity < 2.0 {
             self.player.velocity += 0.2;
         }
+    }
 
-        // apply velocity to player
+    fn apply_velocity_to_player(&mut self) {
         self.player.y += self.player.velocity as i32;
+    }
 
-        // make sure we don't fly off the top of the screen
+    fn bound_player_to_screen(&mut self) {
         if self.player.y < 0 {
             self.player.y = 0;
         }
+    }
 
+    fn horizontally_advance_player(&mut self) {
         self.player.x += 1;
     }
 
-    fn thrust_up(&mut self) {
+    fn flap(&mut self) {
         self.player.velocity = -2.0;
     }
 
