@@ -18,6 +18,21 @@ struct Player {
     velocity: f32
 }
 
+struct Obstacle {
+    x: i32,
+    gap_y: i32,
+    size: i32
+}
+
+struct State {
+    mode: GameMode,
+    player: Player,
+    frame_time: f32,
+    paused: bool,
+    score: i32,
+    obstacle: Obstacle
+}
+
 impl Player {
     fn new(x: i32, y: i32) -> Self {
         Player {
@@ -26,12 +41,6 @@ impl Player {
             velocity: 0.0
         }
     }
-}
-
-struct Obstacle {
-    x: i32,
-    gap_y: i32,
-    size: i32
 }
 
 impl Obstacle {
@@ -43,15 +52,6 @@ impl Obstacle {
             size: i32::max(2, 20-score)
         }
     }
-}
-
-struct State {
-    mode: GameMode,
-    player: Player,
-    frame_time: f32,
-    paused: bool,
-    score: i32,
-    obstacle: Obstacle
 }
 
 impl State {
@@ -196,7 +196,9 @@ impl State {
     }
 
     fn restart(&mut self) {
-        self.player = Player::new(5,20);
+        self.score = 0;
+        self.player = Player::new(0,20);
+        self.obstacle = Obstacle::new(SCREEN_WIDTH+self.player.x-X_DRAW_OFFSET, self.score);
         self.frame_time = 0.0;
         self.mode = GameMode::Playing;
     }
