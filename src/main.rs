@@ -41,6 +41,48 @@ impl Player {
             velocity: 0.0
         }
     }
+
+    fn render(&mut self, ctx: &mut BTerm) {
+        ctx.set(
+            0+X_DRAW_OFFSET,
+            self.y,
+            YELLOW,
+            WINDOW_BG,
+            to_cp437('@')
+        );
+    }
+
+    fn update(&mut self) {
+        self.apply_gravity_to_velocity();
+        self.apply_velocity_to_player();
+        self.bound_player_to_screen();
+        self.horizontally_advance_player();
+    }
+
+    fn apply_gravity_to_velocity(&mut self) {
+        // arbitrary terminal velocity of 2.0
+        if self.velocity < 2.0 {
+            self.velocity += 0.2;
+        }
+    }
+
+    fn apply_velocity_to_player(&mut self) {
+        self.y += self.velocity as i32;
+    }
+
+    fn bound_player_to_screen(&mut self) {
+        if self.y < 0 {
+            self.y = 0;
+        }
+    }
+
+    fn horizontally_advance_player(&mut self) {
+        self.x += 1;
+    }
+    
+    fn flap(&mut self) {
+        self.velocity = -2.0;
+    }
 }
 
 impl Obstacle {
@@ -90,16 +132,16 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.move_player();
-        self.check_score();
+        self.player.update();
         self.end_game_if_colliding();
+        self.check_score();
         self.spawn_new_obstacle();
     }
 
     fn poll_for_ingame_input(&mut self, ctx: &mut BTerm) {
         if let Some(key) = ctx.key {
             match key {
-                VirtualKeyCode::Space => self.flap(),
+                VirtualKeyCode::Space => self.player.flap(),
                 VirtualKeyCode::P => self.pause(),
                 _ => {}
             }
@@ -109,7 +151,7 @@ impl State {
     fn render_ingame(&mut self, ctx: &mut BTerm) {
         ctx.cls_bg(WINDOW_BG);
         self.render_obstacle(ctx);
-        self.render_player(ctx);
+        self.player.render(ctx);
         ctx.print(1,1, "Press [SPACE] to fly!");
         ctx.print(1,3, &format!("Score: {}", self.score));
     }
@@ -226,48 +268,6 @@ impl State {
                 to_cp437('|')
             );
         }
-    }
-
-    fn render_player(&mut self, ctx: &mut BTerm) {
-        ctx.set(
-            0+X_DRAW_OFFSET,
-            self.player.y,
-            YELLOW,
-            WINDOW_BG,
-            to_cp437('@')
-        );
-    }
-
-    fn move_player(&mut self) {
-        self.apply_gravity_to_velocity();
-        self.apply_velocity_to_player();
-        self.bound_player_to_screen();
-        self.horizontally_advance_player();
-    }
-
-    fn apply_gravity_to_velocity(&mut self) {
-        // arbitrary terminal velocity of 2.0
-        if self.player.velocity < 2.0 {
-            self.player.velocity += 0.2;
-        }
-    }
-
-    fn apply_velocity_to_player(&mut self) {
-        self.player.y += self.player.velocity as i32;
-    }
-
-    fn bound_player_to_screen(&mut self) {
-        if self.player.y < 0 {
-            self.player.y = 0;
-        }
-    }
-
-    fn horizontally_advance_player(&mut self) {
-        self.player.x += 1;
-    }
-
-    fn flap(&mut self) {
-        self.player.velocity = -2.0;
     }
 
     fn pause(&mut self) {
