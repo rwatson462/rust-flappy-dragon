@@ -2,9 +2,10 @@ use bracket_lib::prelude::*;
 
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
-const FRAME_DURATION: f32 = 50.0;
 const WINDOW_BG: (u8,u8,u8) = NAVY;
 const X_DRAW_OFFSET: i32 = 5;
+const TERMINAL_VELOCITY: f32 = 2.0;
+const GRAVITY: f32 = 0.2;
 
 enum GameMode {
     Menu,
@@ -15,7 +16,8 @@ enum GameMode {
 struct Player {
     x: i32,
     y: i32,
-    velocity: f32
+    velocity: f32,
+    frame_number: i32
 }
 
 struct Obstacle {
@@ -27,7 +29,6 @@ struct Obstacle {
 struct State {
     mode: GameMode,
     player: Player,
-    frame_time: f32,
     paused: bool,
     score: i32,
     obstacle: Obstacle
@@ -38,7 +39,8 @@ impl Player {
         Player {
             x,
             y,
-            velocity: 0.0
+            velocity: 0.0,
+            frame_number: 1
         }
     }
 
@@ -48,21 +50,31 @@ impl Player {
             self.y,
             YELLOW,
             WINDOW_BG,
-            to_cp437('@')
+            to_cp437(self.frame_number.to_string().chars().nth(0).unwrap())
         );
+        
+        self.advance_animation();
     }
 
     fn update(&mut self) {
         self.apply_gravity_to_velocity();
         self.apply_velocity_to_player();
-        self.bound_player_to_screen();
+        self.bind_player_to_screen();
         self.horizontally_advance_player();
     }
 
+    fn advance_animation(&mut self) {
+        if self.velocity < 0.0 || self.frame_number > 1 {
+            self.frame_number += 1;
+            if self.frame_number > 4 {
+                self.frame_number = 1;
+            }
+        }
+    }
+
     fn apply_gravity_to_velocity(&mut self) {
-        // arbitrary terminal velocity of 2.0
-        if self.velocity < 2.0 {
-            self.velocity += 0.2;
+        if self.velocity < TERMINAL_VELOCITY {
+            self.velocity += GRAVITY;
         }
     }
 
@@ -70,7 +82,7 @@ impl Player {
         self.y += self.velocity as i32;
     }
 
-    fn bound_player_to_screen(&mut self) {
+    fn bind_player_to_screen(&mut self) {
         if self.y < 0 {
             self.y = 0;
         }
@@ -81,7 +93,7 @@ impl Player {
     }
     
     fn flap(&mut self) {
-        self.velocity = -2.0;
+        self.velocity = -TERMINAL_VELOCITY;
     }
 }
 
@@ -101,7 +113,6 @@ impl State {
         State {
             mode: GameMode::Menu,
             player: Player::new(0,20),
-            frame_time: 0.0,
             paused: false,
             score: 0,
             obstacle: Obstacle::new(SCREEN_WIDTH, 0)
@@ -114,24 +125,16 @@ impl State {
     }
 
     fn playing(&mut self, ctx: &mut BTerm) {
-        self.update_game_state(ctx);
+        self.update();
         self.poll_for_ingame_input(ctx);
         self.render_ingame(ctx);
     }
 
-    fn update_game_state(&mut self, ctx: &mut BTerm) {
+    fn update(&mut self) {
         if self.paused {
             return;
         }
 
-        self.frame_time += ctx.frame_time_ms;
-        if self.frame_time > FRAME_DURATION {
-            self.frame_time = 0.0;
-            self.update();
-        }
-    }
-
-    fn update(&mut self) {
         self.player.update();
         self.end_game_if_colliding();
         self.check_score();
@@ -241,7 +244,6 @@ impl State {
         self.score = 0;
         self.player = Player::new(0,20);
         self.obstacle = Obstacle::new(SCREEN_WIDTH+self.player.x-X_DRAW_OFFSET, self.score);
-        self.frame_time = 0.0;
         self.mode = GameMode::Playing;
     }
 
@@ -255,7 +257,7 @@ impl State {
                 y,
                 RED,
                 WINDOW_BG,
-                to_cp437('|')
+                to_cp437('#')
             );
         }
 
@@ -265,13 +267,12 @@ impl State {
                 y,
                 RED,
                 WINDOW_BG,
-                to_cp437('|')
+                to_cp437('#')
             );
         }
     }
 
     fn pause(&mut self) {
-        // todo apply a pause feature
         self.paused = !self.paused;
     }
 }
@@ -287,8 +288,15 @@ impl GameState for State {
 }
 
 fn main() -> BError {
-    let context = BTermBuilder::simple80x50()
+    let context = BTermBuilder::new()
         .with_title("Flappy Dragon")
+        .with_fps_cap(30.0)
+        .with_dimensions(SCREEN_WIDTH, SCREEN_HEIGHT)
+        .with_tile_dimensions(32,32)
+        .with_resource_path("resources/")
+        .with_font("dungeonfont.png", 32, 32)
+        .with_simple_console(SCREEN_WIDTH, SCREEN_HEIGHT, "dungeonfont.png")
+        .with_simple_console_no_bg(SCREEN_WIDTH, SCREEN_HEIGHT, "dungeonfont.png")
         .build()?;
-    main_loop(context,State::new())
+    main_loop(context, State::new())
 }
